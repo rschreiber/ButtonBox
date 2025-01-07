@@ -48,23 +48,27 @@ unsigned long encoderLastDebounceTime[] = {0, 0};
 #define BUTTON_RELEASED HIGH
 #define BUTTON_PRESSED LOW
 
-#define I2C_ADDRESS 0x04
-#define I2C_ENABLED 1
+// Define the pin for address selection
+#define ADDRESS_PIN A3 // Use an available pin (analog or digital)
+
+// Define possible I2C addresses
+#define ADDRESS_1 0x04 // Address when switch is LOW
+#define ADDRESS_2 0x05 // Address when switch is HIGH
+
+int i2cAddress; // Variable to store the chosen address
 
 #define DEBOUNCE_DELAY 50
 #define ENCODER_DELAY 50
 
-#define KEY_PRESSED_OFFSET 0
-#define KEY_RELEASED_OFFSET 64
-
-#define ENCODER_1_OFFSET 16
-#define ENCODER_2_OFFSET 32
-
-
+#define ENCODER_1_OFFSET 8
+#define ENCODER_2_OFFSET 12
 
 #define LED_RED A0
 #define LED_GREEN A1
 #define LED_BLUE A2
+
+#define COMMAND_PRESS 0
+#define COMMAND_RELEASE 1
 
 // Colors for modes
 int colorModeA[3] = {255, 0, 0}; // Red for Mode A
@@ -102,12 +106,19 @@ void setup()
     Serial.begin(115200);
     DebugPrintln("Starting...");
 
-#if I2C_ENABLED
-    DebugPrint("I2C address: ");
-    DebugPrintln(I2C_ADDRESS);
-    DebugPrintln("I2C enabled.");
+    //Set up the address for the I2C based on a pin state
+    pinMode(ADDRESS_PIN, INPUT_PULLUP); // Configure the address pin with internal pull-up
+
+    // Read the state of the address pin
+    if (digitalRead(ADDRESS_PIN) == LOW) {
+        i2cAddress = ADDRESS_1; // Use the first address
+    } else {
+        i2cAddress = ADDRESS_2; // Use the second address
+    }
+
+    Serial.print("I2C address: 0x");
+    Serial.println(i2cAddress, HEX);
     Wire.begin();
-#endif
 
     // Initialize buttons
     for (int i = 0; i < BUTTON_COUNT; i++)
@@ -144,28 +155,23 @@ void setup()
     DebugPrintln("Started.");
 }
 
-void keyPress(int key)
+void sendCommand(int commandType, int controller)
 {
-    DebugPrint("Key pressed: ");
-    DebugPrintln(key + KEY_PRESSED_OFFSET);
 
-#if I2C_ENABLED
-    Wire.beginTransmission(I2C_ADDRESS);
-    Wire.write(key + KEY_PRESSED_OFFSET);
+    if (commandType == COMMAND_PRESS)
+    {
+        DebugPrint("Button pressed: ");
+    }
+    else
+    {
+        DebugPrint("Button released: ");
+    }
+    DebugPrintln(controller);
+
+    Wire.beginTransmission(i2cAddress);
+    Wire.write(commandType);
+    Wire.write(controller);
     Wire.endTransmission();
-#endif
-}
-
-void keyRelease(int key)
-{
-    DebugPrint("Key released: ");
-    DebugPrintln(key);
-
-#if I2C_ENABLED
-    Wire.beginTransmission(I2C_ADDRESS);
-    Wire.write(key + KEY_RELEASED_OFFSET);
-    Wire.endTransmission();
-#endif
 }
 
 void handleEncoderSwitch(int encoder)
@@ -260,9 +266,7 @@ void handleEncoderRotation(int encoder)
 
         if (isReleased[encoder]) // Only send a "press" if "release" was sent
         {
-#if I2C_ENABLED
-            keyPress(value); // Send "press" event
-#endif
+            sendCommand(COMMAND_PRESS, value); // Send "press" event
             isReleased[encoder] = false; // Mark as "pressed"
             lastValue[encoder] = value;  // Store the value for the release event
         }
@@ -271,9 +275,7 @@ void handleEncoderRotation(int encoder)
     // Handle non-blocking "release" event
     if (!isReleased[encoder] && millis() - lastReleaseTime[encoder] >= ENCODER_DELAY)
     {
-#if I2C_ENABLED
-        keyRelease(lastValue[encoder]); // Send "release" event with the stored value
-#endif
+        sendCommand(COMMAND_RELEASE, lastValue[encoder]); // Send "release" event with the stored value
         lastReleaseTime[encoder] = millis(); // Update the last release time
         isReleased[encoder] = true;          // Mark as "released"
     }
@@ -299,11 +301,11 @@ void checkButtons()
 
                 if (buttonsState[i] == BUTTON_PRESSED)
                 {
-                    keyPress(i);
+                    sendCommand(COMMAND_PRESS, i);
                 }
                 else
                 {
-                    keyRelease(i);
+                    sendCommand(COMMAND_RELEASE, i);
                 }
             }
         }

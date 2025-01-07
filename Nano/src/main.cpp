@@ -16,7 +16,7 @@ int buttonsState[] = {HIGH, HIGH, HIGH, HIGH, HIGH};
 int buttonsLastState[] = {HIGH, HIGH, HIGH, HIGH, HIGH};
 unsigned long lastDebounceTime[BUTTON_COUNT] = {0, 0, 0, 0, 0};
 
-// Encoder definitions
+// Encoder definitions for debugging with a single encoder
 // #define RC1_SWITCH 10
 // #define RC1_CLK 11
 // #define RC1_DATA 12
